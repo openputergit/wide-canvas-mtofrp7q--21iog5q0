@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroOSB - On-Screen Button Simulator & Code Generator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        slateBlue: {
+                            50: '#f4f7f9',
+                            100: '#e6edf2',
+                            200: '#ccdbe5',
+                            300: '#a3bece',
+                            400: '#729cb1',
+                            500: '#4e7d95',
+                            600: '#3c6479',
+                            700: '#345264',
+                            800: '#2e4554',
+                            900: '#2a3b47',
+                            950: '#18242e',
+                        },
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(114, 156, 177, 0.5);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(114, 156, 177, 0.8);
+        }
+
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(24, 36, 46, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-input {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            outline: none;
+            border-color: #729cb1;
+            box-shadow: 0 0 10px rgba(114, 156, 177, 0.3);
+        }
+
+        /* Glowing accents */
+        .glow-teal {
+            box-shadow: 0 0 20px rgba(114, 156, 177, 0.4);
+        }
+
+        /* Keybind listening pulse */
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); }
+            50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+        }
+        .listening-active {
+            animation: pulse-border 1.5s infinite;
+            background: rgba(239, 68, 68, 0.1) !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 overflow-x-hidden min-h-screen relative font-sans selection:bg-slateBlue-500 selection:text-white">
+
+    <!-- 3D ThreeJS Scene Container (Sunny Clouds, Mountains & Lake Background) -->
+    <div id="threejs-container" class="fixed inset-0 z-0 pointer-events-none opacity-80"></div>
+
+    <!-- Main Application Wrapper -->
+    <div class="relative z-10 flex flex-col min-h-screen">
+        
+        <!-- Header / Navigation -->
+        <header class="glass-panel border-b border-white/5 py-4 px-6 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-slateBlue-600 to-slateBlue-400 flex items-center justify-center text-white shadow-lg glow-teal">
+                        <i class="bi bi-cursor-fill text-xl rotate-45"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slateBlue-200 to-slateBlue-400 bg-clip-text text-transparent">AeroOSB</h1>
+                        <p class="text-xs text-slateBlue-300 font-medium">On-Screen Click-Through Overlay Studio</p>
+                    </div>
+                </div>
+
+                <!-- Info Pill -->
+                <div class="flex items-center gap-6 text-sm text-slateBlue-200 bg-slate-950/60 py-1.5 px-4 rounded-full border border-white/5">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> Virtual Environment Ready</span>
+                    <span class="hidden sm:inline text-slateBlue-400">|</span>
+                    <button onclick="toggleModal('guide-modal')" class="hover:text-white transition duration-200 flex items-center gap-1">
+                        <i class="bi bi-question-circle"></i> Quick Guide
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+            
+            <!-- Left Panel: Configuration & OSB Controls (4 Cols) -->
+            <section class="lg:col-span-4 flex flex-col gap-6">
+                <!-- OSB Creator Dashboard -->
+                <div class="glass-panel p-5 rounded-2xl shadow-xl flex flex-col gap-5">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-sliders2-vertical text-slateBlue-400"></i> Button Designer
+                        </h2>
+                        <span class="text-xs bg-slateBlue-500/20 text-slateBlue-300 px-2 py-1 rounded border border-slateBlue-500/30 font-semibold uppercase tracking-wider">v1.4 PRO</span>
+                    </div>
+
+                    <!-- Config Form -->
+                    <div class="space-y-4">
+                        <!-- Step 1: Assign Physical Trigger -->
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slateBlue-300 mb-1.5">1. Map Keyboard / Mouse Key</label>
+                            <div class="flex gap-2">
+                                <button id="btn-bind-trigger" onclick="startKeyBinding()" class="flex-1 py-3 px-4 rounded-xl glass-input flex items-center justify-between text-left hover:border-slateBlue-400 transition-all group">
+                                    <span id="bind-label" class="text-slate-300 group-hover:text-white transition-colors">Press to bind Key...</span>
+                                    <kbd id="bind-kbd" class="bg-slate-950 text-slateBlue-300 px-2.5 py-1 rounded text-xs border border-white/10 font-mono shadow-inner">NONE</kbd>
+                                </button>
+                                <button onclick="resetKeyBinding()" class="px-3 bg-slate-900 border border-white/10 hover:border-rose-500/40 rounded-xl hover:text-rose-400 transition duration-200" title="Reset Binding">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
+                            <span class="text-[10px] text-slateBlue-400 block mt-1"><i class="bi bi-info-circle"></i> This physical key will trigger a click exactly where the floating overlay sits.</span>
+                        </div>
+
+                        <!-- Button Settings -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slateBlue-300 mb-1.5">Label / Name</label>
+                                <input type="text" id="osb-label" value="Auto-Trigger" class="w-full p-2.5 rounded-xl glass-input text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slateBlue-300 mb-1.5">Action Type</label>
+                                <select id="osb-action" class="w-full p-2.5 rounded-xl glass-input text-sm">
+                                    <option value="click">Left Click</option>
+                                    <option value="right-click">Right Click</option>
+                                    <option value="double-click">Double Click</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Aesthetics: Color, Size & Opacity -->
+                        <div class="space-y-3 pt-2 border-t border-white/5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slateBlue-300">2. Custom Theme & Opacity</label>
+                            
+                            <!-- Custom Color Picker Blocks -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slateBlue-400 mr-2">Color:</span>
+                                <div class="flex gap-1.5">
+                                    <button onclick="setThemeColor('#4e7d95')" class="w-7 h-7 rounded-full bg-[#4e7d95] border-2 border-white ring-2 ring-slateBlue-500/20 transition-all color-swatch" data-color="#4e7d95"></button>
+                                    <button onclick="setThemeColor('#10b981')" class="w-7 h-7 rounded-full bg-[#10b981] border-2 border-transparent transition-all color-swatch" data-color="#10b981"></button>
+                                    <button onclick="setThemeColor('#f59e0b')" class="w-7 h-7 rounded-full bg-[#f59e0b] border-2 border-transparent transition-all color-swatch" data-color="#f59e0b"></button>
+                                    <button onclick="setThemeColor('#ef4444')" class="w-7 h-7 rounded-full bg-[#ef4444] border-2 border-transparent transition-all color-swatch" data-color="#ef4444"></button>
+                                    <button onclick="setThemeColor('#8b5cf6')" class="w-7 h-7 rounded-full bg-[#8b5cf6] border-2 border-transparent transition-all color-swatch" data-color="#8b5cf6"></button>
+                                </div>
+                            </div>
+
+                            <!-- Slider: Opacity -->
+                            <div>
+                                <div class="flex justify-between text-xs text-slateBlue-300 mb-1">
+                                    <span>Overlay Opacity (Active)</span>
+                                    <span id="opacity-val">80%</span>
+                                </div>
+                                <input type="range" id="osb-opacity" min="20" max="100" value="80" class="w-full accent-slateBlue-400 bg-slate-950/60 rounded-lg appearance-none h-1.5" oninput="updateSliders()">
+                            </div>
+
+                            <!-- Slider: Button Size -->
+                            <div>
+                                <div class="flex justify-between text-xs text-slateBlue-300 mb-1">
+                                    <span>Button Scale</span>
+                                    <span id="size-val">65px</span>
+                                </div>
+                                <input type="range" id="osb-size" min="40" max="100" value="65" class="w-full accent-slateBlue-400 bg-slate-950/60 rounded-lg appearance-none h-1.5" oninput="updateSliders()">
+                            </div>
+                        </div>
+
+                        <!-- Save & Spawn Actions -->
+                        <div class="pt-2 flex flex-col gap-2">
+                            <button onclick="spawnFloatingButton()" class="w-full py-3 bg-gradient-to-r from-slateBlue-600 to-slateBlue-500 hover:from-slateBlue-500 hover:to-slateBlue-400 text-white font-semibold rounded-xl shadow-lg hover:shadow-slateBlue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                <i class="bi bi-plus-circle"></i> Spawn Floating OSB
+                            </button>
+                            <button onclick="clearAllOSBs()" class="w-full py-2 bg-slate-900 border border-white/5 hover:bg-rose-950/30 hover:border-rose-500/30 text-xs text-slateBlue-300 hover:text-rose-400 rounded-xl transition duration-150 flex items-center justify-center gap-1.5">
+                                <i class="bi bi-trash"></i> Destroy All Active Buttons
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export & Real Utility Code Panel -->
+                <div class="glass-panel p-5 rounded-2xl shadow-xl flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                            <i class="bi bi-terminal-box text-emerald-400"></i> Compile Standalone Script
+                        </h3>
+                        <p class="text-xs text-slateBlue-300 mt-0.5">Need this utility system-wide on your desktop? Compile it directly using our AHK / Python script exporters.</p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="generateScript('python')" class="flex-1 py-2 px-3 bg-slate-900/60 hover:bg-slate-900 border border-white/10 hover:border-slateBlue-400 text-xs text-slate-200 font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-1.5">
+                            <i class="bi bi-filetype-py text-emerald-400 text-base"></i> Export Python
+                        </button>
+                        <button onclick="generateScript('ahk')" class="flex-1 py-2 px-3 bg-slate-900/60 hover:bg-slate-900 border border-white/10 hover:border-slateBlue-400 text-xs text-slate-200 font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-1.5">
+                            <i class="bi bi-gear-wide-connected text-orange-400 text-base"></i> Export AHK
+                        </button>
+                    </div>
+
+                    <button onclick="openPromptGenerator()" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slateBlue-300 hover:text-white border border-white/5 hover:border-white/10 rounded-xl transition flex items-center justify-center gap-1.5">
+                        <i class="bi bi-lightbulb text-amber-400"></i> OSB Prompt Engineer Generator
+                    </button>
+                </div>
+            </section>
+
+            <!-- Center Panel: Simulated Environment (8 Cols) -->
+            <section class="lg:col-span-8 flex flex-col gap-6">
+                <!-- Simulator Monitor Canvas -->
+                <div class="glass-panel rounded-2xl flex-1 flex flex-col overflow-hidden shadow-2xl relative border border-white/10">
+                    
+                    <!-- Monitor Header Menu Bar -->
+                    <div class="bg-slate-950/80 px-4 py-2.5 flex items-center justify-between border-b border-white/5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-500/80"></span>
+                            <span class="w-3 h-3 rounded-full bg-amber-500/80"></span>
+                            <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+                            <span class="text-xs text-slateBlue-400 font-medium ml-2 font-mono">Simulated Desktop Environment</span>
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-white/5">
+                                <span class="text-[10px] text-slateBlue-400 uppercase font-semibold">Click-Through:</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="clickthrough-toggle" class="sr-only peer" checked onchange="toggleClickThrough()">
+                                    <div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-slateBlue-500"></div>
+                                </label>
+                            </div>
+                            <button onclick="resetSimulator()" class="p-1 px-2.5 bg-slate-900 border border-white/5 hover:border-slateBlue-400 rounded-lg text-xs hover:text-white transition duration-200" title="Reset Simulation Score & Positions">
+                                <i class="bi bi-arrow-clockwise"></i> Reset Workspace
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Virtual Screen Canvas Area -->
+                    <div id="sim-workspace" class="relative flex-1 min-h-[480px] bg-cover bg-center overflow-hidden flex flex-col justify-between" style="background-image: linear-gradient(rgba(15,23,42,0.6), rgba(15,23,42,0.85)), url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80');">
+                        
+                        <!-- Instruction Banner / Hint -->
+                        <div class="p-4 flex justify-between items-start z-10">
+                            <div class="bg-slate-950/80 backdrop-blur border border-white/10 p-3 rounded-xl max-w-sm">
+                                <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-1">💡 Interactive OSB Simulator</h4>
+                                <ul class="text-[11px] text-slateBlue-300 space-y-1 list-disc list-inside">
+                                    <li>Drag floating buttons into placement.</li>
+                                    <li>Toggle <span class="font-bold text-slateBlue-200">Click-Through</span> mode.</li>
+                                    <li>Press your bound physical key to trigger automated click-through simulation precisely beneath the floating OSB.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Click scoring board -->
+                            <div class="bg-slate-950/80 backdrop-blur border border-white/10 py-2 px-4 rounded-xl flex items-center gap-4 text-center">
+                                <div>
+                                    <p class="text-[10px] text-slateBlue-400 uppercase tracking-widest font-bold">Simulated Hits</p>
+                                    <p id="stat-hits" class="text-lg font-bold text-emerald-400 font-mono">0</p>
+                                </div>
+                                <div class="border-l border-white/10 pl-4">
+                                    <p class="text-[10px] text-slateBlue-400 uppercase tracking-widest font-bold">Key Triggers</p>
+                                    <p id="stat-triggers" class="text-lg font-bold text-slateBlue-300 font-mono">0</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floating Sandbox Game Target Area (What users "click through" to activate) -->
+                        <div class="flex-1 flex items-center justify-center p-8 z-10 relative">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-lg">
+                                <!-- Interactive Node 1 -->
+                                <button id="target-1" onclick="hitTarget(1)" class="h-24 rounded-2xl glass-panel hover:bg-slateBlue-600/20 active:scale-95 transition border-2 border-white/5 hover:border-slateBlue-400/40 flex flex-col items-center justify-center gap-1.5 p-3 text-center target-node">
+                                    <div class="w-8 h-8 rounded-lg bg-slateBlue-500/20 flex items-center justify-center text-slateBlue-300 text-lg">
+                                        <i class="bi bi-shield-check"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-slateBlue-200">Defend Sector</span>
+                                    <span class="text-[9px] text-emerald-400 font-mono tracking-wider" id="target-1-count">0 hits</span>
+                                </button>
+                                
+                                <!-- Interactive Node 2 -->
+                                <button id="target-2" onclick="hitTarget(2)" class="h-24 rounded-2xl glass-panel hover:bg-emerald-600/20 active:scale-95 transition border-2 border-white/5 hover:border-emerald-400/40 flex flex-col items-center justify-center gap-1.5 p-3 text-center target-node">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300 text-lg">
+                                        <i class="bi bi-play-circle-fill animate-pulse"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-emerald-200">Boost Engine</span>
+                                    <span class="text-[9px] text-emerald-400 font-mono tracking-wider" id="target-2-count">0 hits</span>
+                                </button>
+
+                                <!-- Interactive Node 3 -->
+                                <button id="target-3" onclick="hitTarget(3)" class="h-24 rounded-2xl glass-panel hover:bg-amber-600/20 active:scale-95 transition border-2 border-white/5 hover:border-amber-400/40 flex flex-col items-center justify-center gap-1.5 p-3 text-center target-node">
+                                    <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-300 text-lg">
+                                        <i class="bi bi-fire"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-amber-200">Ignite Engine</span>
+                                    <span class="text-[9px] text-emerald-400 font-mono tracking-wider" id="target-3-count">0 hits</span>
+                                </button>
+
+                                <!-- Interactive Node 4 -->
+                                <button id="target-4" onclick="hitTarget(4)" class="h-24 rounded-2xl glass-panel hover:bg-purple-600/20 active:scale-95 transition border-2 border-white/5 hover:border-purple-400/40 flex flex-col items-center justify-center gap-1.5 p-3 text-center target-node">
+                                    <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-300 text-lg">
+                                        <i class="bi bi-rocket-takeoff"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-purple-200">Launch Rocket</span>
+                                    <span class="text-[9px] text-emerald-400 font-mono tracking-wider" id="target-4-count">0 hits</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Floating Canvas Overlay Container (All active OSBs render here) -->
+                        <div id="floating-canvas-area" class="absolute inset-0 z-20 pointer-events-none select-none">
+                            <!-- Custom dynamic floating buttons render here -->
+                        </div>
+
+                        <!-- Status bar bottom -->
+                        <div class="p-3 bg-slate-950/90 border-t border-white/5 text-[11px] text-slateBlue-400 flex flex-col sm:flex-row justify-between items-center gap-2 z-10">
+                            <span class="flex items-center gap-1.5"><i class="bi bi-window-sidebar text-slateBlue-300"></i> Workspace Coordinates mapping enabled (1080p Virtualized)</span>
+                            <span class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Virtual Layer: Click-Through active
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-auto py-6 border-t border-white/5 text-center text-xs text-slateBlue-400 glass-panel">
+            <p>© 2024 AeroOSB Studio. Built for game macro creation, overlay accessibility, and high performance workflow design.</p>
+        </footer>
+    </div>
+
+    <!-- Modal 1: Export Code Generator Modal -->
+    <div id="export-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
+        <div class="glass-panel max-w-2xl w-full rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-white/5 flex items-center justify-between bg-slate-950/40">
+                <div class="flex items-center gap-2">
+                    <span id="export-lang-icon" class="text-xl"></span>
+                    <h3 class="font-bold text-white text-base">Generate <span id="export-lang-title"></span> Script</h3>
+                </div>
+                <button onclick="toggleModal('export-modal')" class="text-slateBlue-300 hover:text-white transition text-lg"><i class="bi bi-x-lg"></i></button>
+            </div>
+            
+            <div class="p-5 overflow-y-auto space-y-4">
+                <p class="text-xs text-slateBlue-300">Copy this code and save it to your local machine as <code id="export-filename" class="bg-slate-950 px-2 py-0.5 rounded text-white font-mono"></code>. Execute it to instantiate a production-ready system-level on-screen click-through trigger on your desktop!</p>
+                
+                <div class="relative">
+                    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-slateBlue-100 overflow-x-auto max-h-[45vh] border border-white/10" id="export-code-block"></pre>
+                    <button onclick="copyToClipboard('export-code-block')" class="absolute top-3 right-3 bg-slateBlue-600 hover:bg-slateBlue-500 text-white font-bold py-1.5 px-3 rounded-lg text-[11px] transition-all flex items-center gap-1 shadow-md">
+                        <i class="bi bi-clipboard"></i> Copy Code
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-950/60 border-t border-white/5 flex justify-end">
+                <button onclick="toggleModal('export-modal')" class="px-5 py-2 bg-slate-900 border border-white/5 hover:border-slateBlue-400 text-xs font-semibold rounded-xl text-slate-200 hover:text-white transition">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Master Prompt Engineer Generator -->
+    <div id="prompt-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
+        <div class="glass-panel max-w-2xl w-full rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-white/5 flex items-center justify-between bg-slate-950/40">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-lightbulb-fill text-amber-400 text-lg"></i>
+                    <h3 class="font-bold text-white text-base">OSB Prompt Design Spec</h3>
+                </div>
+                <button onclick="toggleModal('prompt-modal')" class="text-slateBlue-300 hover:text-white transition text-lg"><i class="bi bi-x-lg"></i></button>
+            </div>
+            
+            <div class="p-5 overflow-y-auto space-y-4 text-xs leading-relaxed text-slateBlue-200">
+                <p>This auto-generated engineering prompt details your configured OSB specs. Copy and pass this prompt directly to any advanced LLM model to develop a customized Electron, C#, or Rust utility.</p>
+                
+                <div class="relative">
+                    <textarea readonly id="prompt-textarea" rows="12" class="w-full bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-300 overflow-y-auto border border-white/10 focus:outline-none resize-none"></textarea>
+                    <button onclick="copyToClipboard('prompt-textarea')" class="absolute top-3 right-3 bg-slateBlue-600 hover:bg-slateBlue-500 text-white font-bold py-1.5 px-3 rounded-lg text-[11px] transition-all flex items-center gap-1 shadow-md">
+                        <i class="bi bi-clipboard"></i> Copy Prompt
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-950/60 border-t border-white/5 flex justify-end">
+                <button onclick="toggleModal('prompt-modal')" class="px-5 py-2 bg-slate-900 border border-white/5 hover:border-slateBlue-400 text-xs font-semibold rounded-xl text-slate-200 hover:text-white transition">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Quick Guide -->
+    <div id="guide-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
+        <div class="glass-panel max-w-md w-full rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-5 border-b border-white/5 flex items-center justify-between bg-slate-950/40">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-info-circle-fill text-slateBlue-400"></i>
+                    <h3 class="font-bold text-white text-base">AeroOSB Quick Guide</h3>
+                </div>
+                <button onclick="toggleModal('guide-modal')" class="text-slateBlue-300 hover:text-white transition text-lg"><i class="bi bi-x-lg"></i></button>
+            </div>
+            
+            <div class="p-5 space-y-4 text-xs text-slateBlue-200">
+                <p><strong>What is an On-Screen Button (OSB)?</strong><br>An OSB is a click-through transparent trigger overlay. It floats over games or windows. When a physical shortcut is clicked, the tool automatically sends clicks directly to whatever is underneath the button.</p>
+                
+                <p><strong>How to test this Simulator:</strong></p>
+                <ol class="list-decimal list-inside space-y-2">
+                    <li>Click <span class="bg-slate-900 px-1.5 py-0.5 rounded text-white font-mono">Press to bind Key...</span>, and press any key on your keyboard (e.g. <code>E</code> or <code>Space</code>).</li>
+                    <li>Hit <span class="text-white font-bold">Spawn Floating OSB</span>.</li>
+                    <li>Drag the spawned button in the simulated monitor over any interactive sectors (like <strong>Boost Engine</strong> or <strong>Launch Rocket</strong>).</li>
+                    <li>With <span class="font-bold text-slateBlue-200">Click-Through</span> toggle enabled, press the bound physical key. Notice the button passes the event straight to the simulated game sectors directly below it!</li>
+                </ol>
+            </div>
+
+            <div class="p-4 bg-slate-950/60 border-t border-white/5 flex justify-end">
+                <button onclick="toggleModal('guide-modal')" class="px-5 py-2 bg-gradient-to-r from-slateBlue-600 to-slateBlue-500 hover:from-slateBlue-500 hover:to-slateBlue-400 text-xs font-semibold rounded-xl text-white transition">Got it, Let's build!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-900 border border-slateBlue-500/40 py-2.5 px-4 rounded-xl text-xs text-slate-100 flex items-center gap-2 shadow-xl opacity-0 transform translate-y-3 transition-all duration-300 pointer-events-none">
+        <i id="toast-icon" class="bi text-emerald-400 text-base"></i>
+        <span id="toast-text"></span>
+    </div>
+
+
+    <!-- ==========================================
+         JAVASCRIPT CODE FOR THREEJS & SIMULATION
+         ========================================== -->
+    <script>
+        // --- 1. THREE.JS SCENE SETUP (Sunny Clouds, Mountains, Lake) ---
+        let scene, camera, renderer, mountains, water, sun;
+        let cloudGroups = [];
+
+        function initThreeJS() {
+            const container = document.getElementById('threejs-container');
+            
+            // Create Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x18242e, 0.015);
+
+            // Create Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.set(0, 15, 60);
+            camera.lookAt(0, 5, 0);
+
+            // Create Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xfff3e0, 0.45);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffeb3b, 1.2);
+            sunLight.position.set(150, 80, -100);
+            scene.add(sunLight);
+
+            // Sun visual sphere
+            const sunGeo = new THREE.SphereGeometry(15, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff59d });
+            sun = new THREE.Mesh(sunGeo, sunMat);
+            sun.position.set(150, 70, -200);
+            scene.add(sun);
+
+            // Create low-poly Mountains
+            const mGeo = new THREE.PlaneGeometry(350, 350, 40, 40);
+            // Distort plane to make majestic stylized low-poly mountains
+            const pos = mGeo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const y = pos.getY(i);
+                // Noise formula for realistic landscape
+                let z = Math.sin(x * 0.04) * Math.cos(y * 0.04) * 20;
+                z += Math.sin(x * 0.01) * Math.sin(y * 0.01) * 35;
+                if (Math.abs(x) < 40 && Math.abs(y) < 40) {
+                    z *= 0.3; // flatten center lake floor
+                }
+                pos.setZ(i, z);
+            }
+            mGeo.computeVertexNormals();
+
+            const mMat = new THREE.MeshStandardMaterial({
+                color: 0x345264, // Slate blue/gray matching visual requirements
+                flatShading: true,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            mountains = new THREE.Mesh(mGeo, mMat);
+            mountains.rotation.x = -Math.PI / 2;
+            mountains.position.y = -10;
+            scene.add(mountains);
+
+            // Create Lake (Water Plane)
+            const wGeo = new THREE.PlaneGeometry(400, 400, 20, 20);
+            const wMat = new THREE.MeshStandardMaterial({
+                color: 0x2e4554, // Serene blue-gray lake matching wall colors
+                roughness: 0.1,
+                metalness: 0.8,
+                transparent: true,
+                opacity: 0.85,
+                flatShading: true
+            });
+            water = new THREE.Mesh(wGeo, wMat);
+            water.rotation.x = -Math.PI / 2;
+            water.position.y = -1.5;
+            scene.add(water);
+
+            // Create Floating Sunny Clouds
+            for (let c = 0; c < 15; c++) {
+                const cloudGroup = new THREE.Group();
+                const numSpheres = 3 + Math.floor(Math.random() * 4);
+                
+                const cloudMat = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    roughness: 0.9,
+                    flatShading: true,
+                    transparent: true,
+                    opacity: 0.9
+                });
+
+                for (let s = 0; s < numSpheres; s++) {
+                    const radius = 3 + Math.random() * 4;
+                    const sphereGeo = new THREE.SphereGeometry(radius, 7, 7);
+                    const sphere = new THREE.Mesh(sphereGeo, cloudMat);
+                    sphere.position.set(
+                        (s * 2.5) - (numSpheres * 1.2),
+                        Math.random() * 2 - 1,
+                        Math.random() * 2 - 1
+                    );
+                    cloudGroup.add(sphere);
+                }
+
+                // Place dynamically across the high skyline
+                cloudGroup.position.set(
+                    Math.random() * 300 - 150,
+                    25 + Math.random() * 15,
+                    Math.random() * 200 - 150
+                );
+                
+                scene.add(cloudGroup);
+                cloudGroups.push(cloudGroup);
+            }
+
+            // Bind Window Resize Event
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Mouse displacement mapping for gentle camera motion
+        let targetCamX = 0;
+        let targetCamY = 15;
+        document.addEventListener('mousemove', (event) => {
+            const mouseX = (event.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+            const mouseY = (event.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+            targetCamX = mouseX * 25;
+            targetCamY = 15 - (mouseY * 12);
+        });
+
+        // Frame update Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Gentle Camera tracking
+            camera.position.x += (targetCamX - camera.position.x) * 0.05;
+            camera.position.y += (targetCamY - camera.position.y) * 0.05;
+            camera.lookAt(0, 5, -20);
+
+            // Water Ripple Sim
+            if (water) {
+                const pos = water.geometry.attributes.position;
+                const time = Date.now() * 0.001;
+                for (let i = 0; i < pos.count; i++) {
+                    const u = pos.getX(i);
+                    const v = pos.getY(i);
+                    // generate gentle low poly wave motion
+                    const wave = Math.sin(u * 0.05 + time) * 0.25 + Math.cos(v * 0.05 + time) * 0.25;
+                    pos.setZ(i, wave);
+                }
+                water.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Cloud movement
+            cloudGroups.forEach(cloud => {
+                cloud.position.x += 0.04;
+                if (cloud.position.x > 180) {
+                    cloud.position.x = -180;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize ThreeJS scene on load
+        window.addEventListener('DOMContentLoaded', initThreeJS);
+
+
+        // --- 2. OSB APPLICATION CORE LOGIC ---
+        
+        let boundKey = null; // Keyboard Event code or Mouse Button ID
+        let boundKeyLabel = "NONE";
+        let isListening = false;
+        let themeColor = '#4e7d95'; // default slate-blue theme
+        let activeOSBs = [];
+
+        // App Statistics trackers
+        let hitsCount = 0;
+        let triggerCount = 0;
+        let targetHits = {1:0, 2:0, 3:0, 4:0};
+
+        // DOM elements cache
+        const btnBindTrigger = document.getElementById('btn-bind-trigger');
+        const bindLabel = document.getElementById('bind-label');
+        const bindKbd = document.getElementById('bind-kbd');
+        const inputLabel = document.getElementById('osb-label');
+        const inputAction = document.getElementById('osb-action');
+        const inputOpacity = document.getElementById('osb-opacity');
+        const inputSize = document.getElementById('osb-size');
+        const workspace = document.getElementById('sim-workspace');
+        const floatingCanvasArea = document.getElementById('floating-canvas-area');
+
+        // Toggle KeyBinding Listening
+        function startKeyBinding() {
+            isListening = true;
+            btnBindTrigger.classList.add('listening-active');
+            bindLabel.innerText = "Listening for keypress...";
+            bindKbd.innerText = "LISTEN";
+            showToast("bi-keyboard", "Press any key on your keyboard or click your mouse to bind...", "amber");
+        }
+
+        // Key Down / Mouse click event interception for custom binding
+        window.addEventListener('keydown', (e) => {
+            if (!isListening) return;
+            e.preventDefault();
+            
+            boundKey = e.code;
+            boundKeyLabel = e.code.replace('Key', '').replace('Digit', '');
+            
+            completeBinding();
+        });
+
+        function completeBinding() {
+            isListening = false;
+            btnBindTrigger.classList.remove('listening-active');
+            bindLabel.innerText = "Mapped Successfully!";
+            bindKbd.innerText = boundKeyLabel;
+            showToast("bi-check-circle-fill", `Trigger bound to physical: [ ${boundKeyLabel} ]`, "emerald");
+        }
+
+        function resetKeyBinding() {
+            boundKey = null;
+            boundKeyLabel = "NONE";
+            bindLabel.innerText = "Press to bind Key...";
+            bindKbd.innerText = "NONE";
+            showToast("bi-trash", "Key binding wiped", "rose");
+        }
+
+        // Theme picker highlighting helper
+        function setThemeColor(color) {
+            themeColor = color;
+            // update swatch highlights
+            document.querySelectorAll('.color-swatch').forEach(swatch => {
+                if (swatch.dataset.color === color) {
+                    swatch.classList.add('border-white', 'ring-2', 'ring-slateBlue-500/20');
+                    swatch.classList.remove('border-transparent');
+                } else {
+                    swatch.classList.remove('border-white', 'ring-2', 'ring-slateBlue-500/20');
+                    swatch.classList.add('border-transparent');
+                }
+            });
+        }
+
+        // Live stats preview labels
+        function updateSliders() {
+            document.getElementById('opacity-val').innerText = `${inputOpacity.value}%`;
+            document.getElementById('size-val').innerText = `${inputSize.value}px`;
+        }
+
+        // Generate and Spawn a new dynamic Virtual On Screen Button element
+        function spawnFloatingButton() {
+            if (!boundKey) {
+                showToast("bi-exclamation-triangle-fill", "Please map a physical key first!", "rose");
+                // shake mapping element
+                btnBindTrigger.classList.add('animate-bounce');
+                setTimeout(() => btnBindTrigger.classList.remove('animate-bounce'), 800);
+                return;
+            }
+
+            const osbId = `osb-${Date.now()}`;
+            const label = inputLabel.value || "Trigger";
+            const size = inputSize.value;
+            const opacity = inputOpacity.value / 100;
+            const action = inputAction.value;
+
+            // Create DOM elements
+            const osbEl = document.createElement('div');
+            osbEl.id = osbId;
+            osbEl.className = "absolute rounded-full flex flex-col items-center justify-center cursor-move text-white text-center font-semibold select-none group border-2 transition-transform active:scale-95";
+            osbEl.style.width = `${size}px`;
+            osbEl.style.height = `${size}px`;
+            osbEl.style.backgroundColor = themeColor + "bf"; // append hex transparency
+            osbEl.style.borderColor = themeColor;
+            osbEl.style.opacity = opacity;
+            osbEl.style.boxShadow = `0 0 15px ${themeColor}80`;
+            
+            // Random default position in workspace
+            const workspaceRect = workspace.getBoundingClientRect();
+            const posX = Math.random() * (workspaceRect.width - size - 40) + 20;
+            const posY = Math.random() * (workspaceRect.height - size - 80) + 50;
+            osbEl.style.left = `${posX}px`;
+            osbEl.style.top = `${posY}px`;
+
+            // Enable Click event mapping pointer setup
+            osbEl.style.pointerEvents = 'auto'; // must be auto to allow dragging and customization
+
+            // Inside content: Icon matching choice
+            let actionIcon = "bi-fingerprint";
+            if (action === "right-click") actionIcon = "bi-mouse3-fill";
+            if (action === "double-click") actionIcon = "bi-lightning-fill";
+
+            osbEl.innerHTML = `
+                <div class="pointer-events-none flex flex-col items-center">
+                    <i class="bi ${actionIcon} text-base md:text-lg mb-0.5"></i>
+                    <span class="text-[9px] uppercase tracking-wide leading-none font-bold">${label}</span>
+                    <span class="text-[8px] opacity-75 font-mono mt-0.5">${boundKeyLabel}</span>
+                </div>
+                <!-- Mini resize/close handle -->
+                <button onclick="destroyOSB('${osbId}', event)" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] pointer-events-auto" title="Delete OSB">
+                    <i class="bi bi-x"></i>
+                </button>
+            `;
+
+            // Append to workspace
+            floatingCanvasArea.appendChild(osbEl);
+
+            // Save data object
+            const osbConfig = {
+                id: osbId,
+                label: label,
+                key: boundKey,
+                keyLabel: boundKeyLabel,
+                size: parseInt(size),
+                opacity: opacity,
+                action: action,
+                color: themeColor,
+                element: osbEl,
+                posX: posX,
+                posY: posY
+            };
+            activeOSBs.push(osbConfig);
+
+            // Bind Drag & Drop Events (Mouse or Touch)
+            makeElementDraggable(osbEl, osbConfig);
+
+            showToast("bi-cursor-fill", `OSB Spawned over workspace. Drag to place!`, "slateBlue");
+        }
+
+        // Element Dragger implementation
+        function makeElementDraggable(elm, config) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            elm.onmousedown = dragMouseDown;
+            elm.ontouchstart = dragTouchStart;
+
+            function dragMouseDown(e) {
+                // Ignore clicks originating on target/delete buttons inside OSB
+                if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return;
+                
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function dragTouchStart(e) {
+                if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return;
+                const touch = e.touches[0];
+                pos3 = touch.clientX;
+                pos4 = touch.clientY;
+                document.ontouchend = closeDragElement;
+                document.ontouchmove = elementTouchDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                updateElementPosition(elm.offsetTop - pos2, elm.offsetLeft - pos1);
+            }
+
+            function elementTouchDrag(e) {
+                const touch = e.touches[0];
+                pos1 = pos3 - touch.clientX;
+                pos2 = pos4 - touch.clientY;
+                pos3 = touch.clientX;
+                pos4 = touch.clientY;
+
+                updateElementPosition(elm.offsetTop - pos2, elm.offsetLeft - pos1);
+            }
+
+            function updateElementPosition(top, left) {
+                const rect = workspace.getBoundingClientRect();
+                const maxTop = rect.height - config.size;
+                const maxLeft = rect.width - config.size;
+
+                // Restrict boundaries to simulator box area
+                const finalTop = Math.max(0, Math.min(top, maxTop));
+                const finalLeft = Math.max(0, Math.min(left, maxLeft));
+
+                elm.style.top = finalTop + "px";
+                elm.style.left = finalLeft + "px";
+
+                // Save coordinate mapping configurations
+                config.posX = finalLeft;
+                config.posY = finalTop;
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                document.ontouchend = null;
+                document.ontouchmove = null;
+            }
+        }
+
+        // Toggle Click Through behaviour visually
+        function toggleClickThrough() {
+            const isClickThrough = document.getElementById('clickthrough-toggle').checked;
+            
+            activeOSBs.forEach(osb => {
+                if (isClickThrough) {
+                    osb.element.style.pointerEvents = 'none';
+                    // Re-enable delete button events manually
+                    const delBtn = osb.element.querySelector('button');
+                    if (delBtn) delBtn.style.pointerEvents = 'auto';
+                } else {
+                    osb.element.style.pointerEvents = 'auto';
+                }
+            });
+
+            showToast(
+                isClickThrough ? "bi-eye-slash-fill" : "bi-eye-fill",
+                isClickThrough ? "Click-Through Active (Passing inputs downward)" : "Click-Through Disabled (Interactive overlays)",
+                isClickThrough ? "emerald" : "slateBlue"
+            );
+        }
+
+        // Single OSB destruction
+        function destroyOSB(id, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const index = activeOSBs.findIndex(o => o.id === id);
+            if (index > -1) {
+                const osb = activeOSBs[index];
+                osb.element.remove();
+                activeOSBs.splice(index, 1);
+                showToast("bi-trash-fill", "Overlay removed", "rose");
+            }
+        }
+
+        // Wipes all active buttons
+        function clearAllOSBs() {
+            activeOSBs.forEach(osb => osb.element.remove());
+            activeOSBs = [];
+            showToast("bi-trash-fill", "Cleared all spawned widgets", "rose");
+        }
+
+
+        // --- 3. HARDWARE EVENT KEY INTERPOLATOR (CLICK-THROUGH SIMULATOR) ---
+        
+        window.addEventListener('keydown', (e) => {
+            // Guard conditions: don't trigger when typing labels, or inside inputs, or when modals are open
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+            if (isListening) return;
+
+            // Scan if active physical keypress matches any configured OSB key binds
+            const activeMatches = activeOSBs.filter(osb => osb.key === e.code);
+
+            if (activeMatches.length > 0) {
+                e.preventDefault();
+                triggerCount += activeMatches.length;
+                document.getElementById('stat-triggers').innerText = triggerCount;
+
+                activeMatches.forEach(osb => {
+                    // Visual feedback click pulse on OSB overlay itself
+                    osb.element.classList.add('scale-110');
+                    setTimeout(() => osb.element.classList.remove('scale-110'), 150);
+
+                    // Perform virtual "click-through" logic
+                    simulateClickThrough(osb);
+                });
+            }
+        });
+
+        // The core "Click-Through" feature simulation engine
+        function simulateClickThrough(osb) {
+            // Get middle absolute coordinates of overlay inside virtual space
+            const wsRect = workspace.getBoundingClientRect();
+            
+            // Calculate coordinate points relative to current document viewport
+            const targetX = wsRect.left + osb.posX + (osb.size / 2);
+            const targetY = wsRect.top + osb.posY + (osb.size / 2);
+
+            // Momentarily hide OSB overlays to allow standard elementFromPoint mapping
+            const originalDisplays = [];
+            activeOSBs.forEach(o => {
+                originalDisplays.push({ el: o.element, originalStyle: o.element.style.pointerEvents });
+                o.element.style.pointerEvents = 'none'; // force temporary total passthrough
+            });
+
+            // Find element at coordinates beneath OSB
+            const hitElement = document.elementFromPoint(targetX, targetY);
+
+            // Re-establish original styling
+            const isClickThrough = document.getElementById('clickthrough-toggle').checked;
+            originalDisplays.forEach(od => {
+                od.el.style.pointerEvents = isClickThrough ? 'none' : 'auto';
+                const delBtn = od.el.querySelector('button');
+                if (delBtn) delBtn.style.pointerEvents = 'auto';
+            });
+
+            // If hit element is target or lives inside simulator, trigger simulated hit
+            if (hitElement) {
+                const targetNode = hitElement.closest('.target-node');
+                if (targetNode) {
+                    targetNode.click(); // trigger actual action call
+                    
+                    // Create beautiful tiny pulse ring effect exactly at pointer hit position
+                    createRingPulse(targetX - wsRect.left, targetY - wsRect.top, osb.color);
+                } else {
+                    // Clicked empty desktop workspace
+                    createRingPulse(targetX - wsRect.left, targetY - wsRect.top, '#cccccc');
+                }
+            }
+        }
+
+        // Draw dynamic ring pulse on virtual screen
+        function createRingPulse(left, top, color) {
+            const pulse = document.createElement('div');
+            pulse.className = "absolute rounded-full border-2 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 animate-ping z-30";
+            pulse.style.width = '30px';
+            pulse.style.height = '30px';
+            pulse.style.borderColor = color;
+            pulse.style.left = `${left}px`;
+            pulse.style.top = `${top}px`;
+
+            workspace.appendChild(pulse);
+            setTimeout(() => pulse.remove(), 1000);
+        }
+
+        // Game score click targets
+        function hitTarget(id) {
+            targetHits[id]++;
+            hitsCount++;
+            
+            // update interface stats
+            document.getElementById('stat-hits').innerText = hitsCount;
+            document.getElementById(`target-${id}-count`).innerText = `${targetHits[id]} hits`;
+
+            // play scale active bounce
+            const el = document.getElementById(`target-${id}`);
+            el.classList.add('scale-95', 'border-emerald-500');
+            setTimeout(() => el.classList.remove('scale-95', 'border-emerald-500'), 150);
+        }
+
+        // Reset workspace game stats
+        function resetSimulator() {
+            hitsCount = 0;
+            triggerCount = 0;
+            targetHits = {1:0, 2:0, 3:0, 4:0};
+            
+            document.getElementById('stat-hits').innerText = '0';
+            document.getElementById('stat-triggers').innerText = '0';
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`target-${i}-count`).innerText = '0 hits';
+            }
+            
+            showToast("bi-arrow-clockwise", "Workspace stats reset", "slateBlue");
+        }
+
+
+        // --- 4. EXPORT UTILITY GENERATORS ---
+        
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function generateScript(lang) {
+            const codeBlock = document.getElementById('export-code-block');
+            const langTitle = document.getElementById('export-lang-title');
+            const langIcon = document.getElementById('export-lang-icon');
+            const filename = document.getElementById('export-filename');
+
+            // Gather configurations
+            const mappingData = activeOSBs.length > 0 ? activeOSBs[0] : {
+                keyLabel: boundKeyLabel !== "NONE" ? boundKeyLabel : "E",
+                action: inputAction.value,
+                label: inputLabel.value || "Trigger"
+            };
+
+            const lowercaseAction = mappingData.action;
+
+            if (lang === 'python') {
+                langTitle.innerText = "Python (PyQt5 + Mouse/Keyboard)";
+                langIcon.className = "bi bi-filetype-py text-emerald-400";
+                filename.innerText = "aero_osb.py";
+
+                codeBlock.innerText = `import sys
+import keyboard
+import mouse
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton
+from PyQt5.QtCore import Qt
+
+class OnScreenButtonOverlay(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        
+    def initUI(self):
+        # Set Frameless, Transparent and Always-on-top attributes
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.SubWindow)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Build transparent Trigger Button Widget
+        self.button = QPushButton("${mappingData.label}\\n[${mappingData.keyLabel}]", self)
+        self.button.setGeometry(0, 0, 80, 80)
+        self.button.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(78, 125, 149, 180);
+                border: 2px solid #4e7d95;
+                color: white;
+                border-radius: 40px;
+                font-family: 'Arial';
+                font-size: 10px;
+                font-weight: bold;
+            }
+        """)
+        
+        self.setGeometry(300, 300, 80, 80)
+        self.show()
+
+        # Keyboard global listener hooks: Click-Through trigger mapping
+        # When user presses physical mapped shortcut, program clicks target coordinates underneath this UI
+        keyboard.on_press_key("${mappingData.keyLabel.lower()}", self.on_hotkey_pressed)
+        
+    def on_hotkey_pressed(self, e):
+        # Retrieve coordinates of overlay center
+        center_x = self.x() + 40
+        center_y = self.y() + 40
+        
+        # Execute passthrough Click using mouse framework
+        current_pos = mouse.get_position()
+        mouse.move(center_x, center_y)
+        
+        # Perform action
+        if "${lowercaseAction}" == "right-click":
+            mouse.right_click()
+        elif "${lowercaseAction}" == "double-click":
+            mouse.double_click()
+        else:
+            mouse.click()
+            
+        # Return mouse to native original placement
+        mouse.move(current_pos[0], current_pos[1])
+
+    # Enable manual overlay click-dragging on Desktop
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self.drag_position)
+            event.accept()
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = OnScreenButtonOverlay()
+    sys.exit(app.exec_())`;
+            } 
+            else if (lang === 'ahk') {
+                langTitle.innerText = "AutoHotkey (v1.1+)";
+                langIcon.className = "bi bi-gear-wide-connected text-orange-400";
+                filename.innerText = "aero_osb.ahk";
+
+                codeBlock.innerText = `; AeroOSB - On-Screen Click-Through Overlay Helper
+; Place overlay window manually or let overlay float above client interfaces.
+#SingleInstance Force
+#NoEnv
+
+; Configure transparent floating GUI window
+Gui +AlwaysOnTop -Caption +ToolWindow +LastFound
+WinSet, TransColor, EEAA99 150 ; transparent background color mask
+Gui, Color, EEAA99
+
+; Add beautiful interactive overlay element circle
+Gui, Font, s8 bold cWhite, Arial
+Gui, Add, Progress, x0 y0 w80 h80 Background4E7D95 Disabled
+Gui, Add, Text, x0 y20 w80 h20 Center BackgroundTrans, ${mappingData.label}
+Gui, Add, Text, x0 y40 w80 h20 Center BackgroundTrans, [${mappingData.keyLabel}]
+
+Gui, Show, x300 y300 w80 h80, AeroOSB_Widget
+return
+
+; Drag window by holding Left Mouse Button anywhere inside GUI
+uiDrag:
+PostMessage, 0xA1, 2,,, AHK_CLASS AutoHotkeyGUI
+return
+
+; Hotkey Passthrough Action Hook
+~*${mappingData.keyLabel.lower()}::
+    ; Calculate window absolute screen positions
+    WinGetPos, winX, winY, winW, winH, AeroOSB_Widget
+    centerX := winX + (winW / 2)
+    centerY := winY + (winH / 2)
+    
+    ; Save original cursor coordinates
+    MouseGetPos, origX, origY
+    
+    ; Perform Click-Through sequence targeting coordinates exactly underneath overlay
+    BlockInput, MouseMove
+    MouseMove, %centerX%, %centerY%, 0
+    
+    if ("${lowercaseAction}" = "right-click") {
+        Click, Right
+    } else if ("${lowercaseAction}" = "double-click") {
+        Click, 2
+    } else {
+        Click
+    }
+    
+    MouseMove, %origX%, %origY%, 0
+    BlockInput, Default
+return
+
+GuiClose:
+ExitApp`;
+            }
+
+            toggleModal('export-modal');
+        }
+
+        // Generate customized prompt details to feed into LLM engines
+        function openPromptGenerator() {
+            const activeCount = activeOSBs.length;
+            const promptArea = document.getElementById('prompt-textarea');
+            
+            let btnSummary = "";
+            activeOSBs.forEach((osb, i) => {
+                btnSummary += `\nButton ${i+1}: Name="${osb.label}", KeyBind="${osb.keyLabel}", Action="${osb.action}", ThemeColor="${osb.color}"`;
+            });
+
+            promptArea.value = `Write a complete, single-file desktop software application (using C# WPF, Rust with iced/egui, or Electron) that implements an "On Screen Button" (OSB) Utility.
+
+The OSB tool acts as a click-through transparent trigger overlay floating on top of all windows and system processes.
+
+Active Configuration Requirements:
+- Active spawned button configurations: ${activeCount > 0 ? btnSummary : "Name='Auto-Clicker', KeyBind='E', Action='Left-Click', ThemeColor='#4e7d95'"}
+- Window Styling:
+  * Borderless, Frameless, and Stays-On-Top (Always On Top layer).
+  * Draggable by clicking and dragging anywhere inside the window boundaries.
+  * Translucent background support.
+- Passive Click-Through Functionality:
+  * When the physical key mapped is pressed, programmatically capture current cursor location.
+  * Rapidly teleport mouse pointer to center coordinates of the floating OSB window.
+  * Trigger click action (Left click, right click or double click) directly pass-through to target app underneath.
+  * Teleport user's pointer instantly back to original location, creating zero disruption.
+  
+Include clean code comments and a minimal stylish system-tray icon setup to safely exit the software.`;
+
+            toggleModal('prompt-modal');
+        }
+
+        // Global Copy Helper
+        function copyToClipboard(elementId) {
+            const el = document.getElementById(elementId);
+            let text = "";
+            if (el.tagName === "TEXTAREA") {
+                text = el.value;
+            } else {
+                text = el.innerText;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("bi-clipboard-check", "Copied code to clipboard!", "emerald");
+            }).catch(() => {
+                showToast("bi-exclamation-triangle", "Failed to copy text", "rose");
+            });
+        }
+
+        // Toast alert system
+        function showToast(icon, message, colorType) {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toast-icon');
+            const toastText = document.getElementById('toast-text');
+
+            toastIcon.className = `bi ${icon}`;
+            
+            if (colorType === 'rose') {
+                toastIcon.className += " text-rose-400";
+                toast.style.borderColor = "rgba(239, 68, 68, 0.4)";
+            } else if (colorType === 'emerald') {
+                toastIcon.className += " text-emerald-400";
+                toast.style.borderColor = "rgba(16, 185, 129, 0.4)";
+            } else if (colorType === 'amber') {
+                toastIcon.className += " text-amber-400";
+                toast.style.borderColor = "rgba(245, 158, 11, 0.4)";
+            } else {
+                toastIcon.className += " text-slateBlue-400";
+                toast.style.borderColor = "rgba(114, 156, 177, 0.4)";
+            }
+
+            toastText.innerText = message;
+            
+            // Fade-in
+            toast.classList.remove('opacity-0', 'translate-y-3', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            // Fade-out timer
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-3', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 3000);
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
